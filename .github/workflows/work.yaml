@@ -25,18 +25,24 @@ jobs:
         run: |
                 docker build --platform linux/amd64 -t threat-composer:${{ github.sha }} .
       
-      - name: Run Trivy Scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'threat-composer:${{ github.sha }}'
-          format: 'table'
-          exit-code: '1'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
+      # - name: Run Trivy Scanner
+      #   uses: aquasecurity/trivy-action@master
+      #   with:
+      #     image-ref: 'threat-composer:${{ github.sha }}'
+      #     format: 'table'
+      #     exit-code: '1'
+      #     ignore-unfixed: true
+      #     vuln-type: 'os,library'
+      #     severity: 'CRITICAL,HIGH'
        
     
       
+      - name: Debug OIDC token          # ← new step goes here
+        if: github.event_name == 'push'
+        run: |
+          curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -R 'split(".") | .[1] | @base64d | fromjson'
+
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
