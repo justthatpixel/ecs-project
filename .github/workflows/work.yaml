@@ -1,0 +1,57 @@
+name: "CI/CD Pipeline"
+permissions:
+  id-token: write
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+    pull_request:
+      branches:
+        - main
+
+
+# build docker image + scan with trivy + push to ECR
+jobs:
+  build-scan-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Build image
+        run: |
+                docker build --platform linux/amd64 -t threat-composer:${{ github.sha }} .
+      
+      - name: Run Trivy Scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'threat-composer:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+       
+    
+      
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/github-actions-ecr-push
+          aws-region: eu-west-2
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+
+      - name: Build, scan and push Docker image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: threat-composer
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+         docker tag threat-composer:${{ github.sha }} $ECR_REGISTRY/$ECR_REPOSITORY:latest
+         docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
